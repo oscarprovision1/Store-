@@ -3,7 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Oscar Enterprise Provision Shop</title>
+<title>Oscar Enterprise Provision Shop | Groceries and provisions in Paynesville, Liberia</title>
+<meta name="description" content="Buy rice, cooking oil, tinned fish, milk, baby food and household goods from Oscar Enterprise Provision Shop in Paynesville, Liberia. Order online from anywhere and have it collected by your family. Pay by card, bank transfer, MTN Mobile Money or within two weeks.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://oscarprovision1.github.io/Store-/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Oscar Enterprise Provision Shop">
+<meta property="og:title" content="Oscar Enterprise Provision Shop | Groceries and provisions in Paynesville, Liberia">
+<meta property="og:description" content="Buy rice, cooking oil, tinned fish, milk, baby food and household goods from Oscar Enterprise Provision Shop in Paynesville, Liberia. Order online from anywhere and have it collected by your family. Pay by card, bank transfer, MTN Mobile Money or within two weeks.">
+<meta property="og:url" content="https://oscarprovision1.github.io/Store-/">
+<meta property="og:image" content="https://oscarprovision1.github.io/Store-/preview.png">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"GroceryStore","name":"Oscar Enterprise Provision Shop","description":"Buy rice, cooking oil, tinned fish, milk, baby food and household goods from Oscar Enterprise Provision Shop in Paynesville, Liberia. Order online from anywhere and have it collected by your family. Pay by card, bank transfer, MTN Mobile Money or within two weeks.","url":"https://oscarprovision1.github.io/Store-/","image":"https://oscarprovision1.github.io/Store-/preview.png","telephone":"+231880958212","address":{"@type":"PostalAddress","streetAddress":"Omega, Redhill Junction, opposite the trade school","addressLocality":"Paynesville","postalCode":"1000","addressCountry":"LR"},"hasMap":"https://maps.app.goo.gl/YVfvEnVE83srcPwo6"}
+</script>
+
 <style>
   :root{
     --bg:#F1F4F7; --ink:#0B2A5B; --muted:#5B6678; --line:#CFD7DF;
@@ -85,6 +99,7 @@
   .done h3{font-family:var(--serif);font-size:1.6rem;margin:0 0 8px}
   .send{display:block;background:#1F8A4C;color:#fff;text-decoration:none;font-weight:700;border-radius:8px;padding:13px;margin-top:12px}
   .send.alt{background:var(--ink)}
+  .send.proof{background:#fff;color:#1F8A4C !important;border:2px solid #1F8A4C}
   .fs{font-family:var(--serif);font-weight:700;font-size:1.05rem;margin:22px 0 2px;padding-top:12px;border-top:1px solid var(--line)}
   .fs:first-child{margin-top:0;padding-top:0;border-top:0}
   .note{background:var(--bg);border-radius:8px;padding:12px;text-align:left;font-size:.95rem;margin-top:16px}
@@ -220,7 +235,7 @@ const LOGO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAaQAAAGkCAMAAABJkqEH
 document.getElementById("logoHeader").src = LOGO;
 document.getElementById("logoHero").src = LOGO;
 (function(){ const l = document.createElement("link"); l.rel = "icon"; l.href = LOGO; document.head.appendChild(l); })();
-document.title = STORE_NAME;
+
 document.getElementById("storeName").textContent = STORE_NAME;
 
 function shapeSVG(shape){
@@ -361,7 +376,11 @@ function renderDrawer(){
       <p style="color:var(--muted)">Total: ${money(lastOrder.total)}${lastOrder.fare===0 ? " + transport fare (to be confirmed)" : ""}<br>Delivery to ${lastOrder.rname}, Liberia</p>
       <a class="send wa" href="${wa}" target="_blank" rel="noopener">1. Send order on WhatsApp</a>
       <a class="send alt" href="${mail}">Or send order by email</a>
-      ${payBlock}</div>`;
+      ${payBlock}
+      <p class="note">After you pay, send us a <strong>screenshot or photo of your payment receipt</strong> with your order number ${lastOrder.ref}, so we can confirm it.</p>
+      <a class="send proof" href="https://wa.me/${OWNER_WHATSAPP}?text=${encodeURIComponent("Payment proof for order " + lastOrder.ref + ". I am attaching my receipt.")}" target="_blank" rel="noopener">Send payment proof on WhatsApp</a>
+      <p class="note"><strong>Receiver's photo:</strong> please send a clear photo of ${lastOrder.rname}, the person who will collect the goods. We use it to confirm who collects them.</p>
+      <a class="send proof" href="https://wa.me/${OWNER_WHATSAPP}?text=${encodeURIComponent("Receiver photo for order " + lastOrder.ref + ". Receiver: " + lastOrder.rname + ", " + lastOrder.rphone + ". I am attaching the photo.")}" target="_blank" rel="noopener">Send receiver's photo on WhatsApp</a></div>`;
     foot.innerHTML = `<button class="primary" id="finish">Continue shopping</button>`;
     document.getElementById("finish").onclick = closeDrawer;
   }

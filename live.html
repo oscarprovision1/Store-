@@ -78,17 +78,20 @@ function ownerStart(){
  unsubs.push(db.collection("riders").onSnapshot(s=>{riders=s.docs.map(d=>({id:d.id,...d.data()}));ownerLists()},e=>{$("#rl").textContent=e.message}));
  unsubs.push(db.collection("jobs").orderBy("ts","desc").onSnapshot(s=>{jobs=s.docs.map(d=>({id:d.id,...d.data()}));ownerLists()},e=>{$("#jl").textContent=e.message}));
 }
+const owed=id=>{const d=jobs.filter(j=>j.rider===id&&j.st==="delivered"),u=d.filter(j=>!j.paid),sum=a=>a.reduce((t,j)=>t+(Number(j.fee)||0),0);
+ return d.length?`<small>${d.length} delivered · you owe <b>$${sum(u).toFixed(2)}</b> (${u.length} unpaid) · paid $${sum(d.filter(j=>j.paid)).toFixed(2)}</small><br>`:""};
 function ownerLists(){
  const ok=riders.filter(r=>r.approved);
- $("#rl").innerHTML=`<div class="card"><h2>Riders</h2>`+(riders.map(r=>`<div style="margin:8px 0"><b>${esc(r.name)}</b> · ${esc(r.phone)}<br>
+ $("#rl").innerHTML=`<div class="card"><h2>Riders</h2>`+(riders.map(r=>`<div style="margin:8px 0"><b>${esc(r.name)}</b> · ${esc(r.phone)}<br>${owed(r.id)}
   ${r.approved?`<span class="tag">Approved</span> <small>seen ${ago(r.ts&&r.lat?r.ts:0)}</small>`:`<button class="btn" data-ap="${r.id}">Approve</button>`}
   ${r.lat?`<button class="btn l" data-sh="${r.id}">Show on map</button>`:""}</div>`).join("")||"<p>No riders yet. Riders create their own account from the login page.</p>")+`</div>`;
  const r=riders.find(x=>x.id===mapR);
  $("#map").innerHTML=r&&r.lat?`<iframe title="Rider map" src="https://www.openstreetmap.org/export/embed.html?bbox=${r.lng-.01},${r.lat-.01},${r.lng+.01},${r.lat+.01}&layer=mapnik&marker=${r.lat},${r.lng}"></iframe><p>${esc(r.name)} · updated ${ago(r.ts)} · <a href="https://www.google.com/maps?q=${r.lat},${r.lng}" target="_blank" rel="noopener">Open in Google Maps</a></p>`:"";
  $("#jl").innerHTML=jobs.map(j=>`<div class="card"><span class="tag">${LBL[j.st]||j.st}</span> <h2>${esc(j.name)} · ${esc(j.phone)}</h2>
-  <p>${esc(j.addr)}</p><p>${esc(j.items)}</p>${photos(j)}<p>Delivery fee $${Number(j.fee).toFixed(2)} (shop paid, buyer owes)</p>
+  <p>${esc(j.addr)}</p><p>${esc(j.items)}</p>${photos(j)}<p>Delivery fee <b>$${Number(j.fee).toFixed(2)}</b> ${j.paid?`<span class="tag">Rider paid</span>`:j.st==="delivered"?`<span class="tag" style="background:#c8932e;color:#0b2a5b">Rider not paid</span>`:""}</p>
   <select data-as="${j.id}" aria-label="Assign rider"><option value="">Assign rider…</option>${ok.map(x=>`<option value="${x.id}"${x.id===j.rider?" selected":""}>${esc(x.name)}</option>`).join("")}</select>
   ${j.st!=="delivered"&&NEXT[j.st]?`<button class="btn o" data-adv="${j.id}">Mark ${LBL[NEXT[j.st]].toLowerCase()}</button>`:""}
+  ${j.st==="delivered"?`<button class="btn ${j.paid?"l":"o"}" data-pay="${j.id}">${j.paid?"Undo paid":"Mark rider paid"}</button>`:""}${j.paid?"":`<button class="btn l" data-fee="${j.id}">Change fee</button>`}
   <a class="btn l" href="${esc(nav(j))}" target="_blank" rel="noopener">Map</a><button class="btn l" data-rm="${j.id}">Remove</button></div>`).join("")||`<div class="card"><p>No deliveries yet.</p></div>`;
 }
 
@@ -145,6 +148,8 @@ document.addEventListener("click",e=>{const t=e.target,d=t.dataset||{};
  if(d.ap)db.collection("riders").doc(d.ap).update({approved:true});
  if(d.sh){mapR=d.sh;ownerLists()}
  if(d.adv){const j=jobs.find(x=>x.id===d.adv);if(j&&NEXT[j.st])db.collection("jobs").doc(j.id).update({st:NEXT[j.st]})}
+ if(d.pay){const j=jobs.find(x=>x.id===d.pay);if(j&&(j.paid||confirm("Mark paid: $"+Number(j.fee).toFixed(2)+" to "+(j.riderName||"rider")+"? Do this after you send the money.")))db.collection("jobs").doc(j.id).update(j.paid?{paid:false,paidTs:null}:{paid:true,paidTs:Date.now()})}
+ if(d.fee){const j=jobs.find(x=>x.id===d.fee),v=j&&prompt("Delivery fee (USD) for "+j.name,j.fee);if(v!==null&&v!==false&&j&&!isNaN(+v)&&v!=="")db.collection("jobs").doc(j.id).update({fee:Math.max(0,+v)})}
  if(d.rm&&confirm("Remove this delivery?"))db.collection("jobs").doc(d.rm).delete();
 });
 document.addEventListener("change",e=>{const t=e.target;

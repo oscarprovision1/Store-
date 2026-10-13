@@ -81,8 +81,10 @@ function ownerStart(){
  unsubs.push(db.collection("riders").onSnapshot(s=>{riders=s.docs.map(d=>({id:d.id,...d.data()}));ownerLists()},e=>{$("#rl").textContent=e.message}));
  unsubs.push(db.collection("jobs").orderBy("ts","desc").onSnapshot(s=>{jobs=s.docs.map(d=>({id:d.id,...d.data()}));ownerLists()},e=>{$("#jl").textContent=e.message}));
 }
-const owed=id=>{const d=jobs.filter(j=>j.rider===id&&j.st==="delivered"),u=d.filter(j=>!j.paid),sum=a=>a.reduce((t,j)=>t+(Number(j.fee)||0),0);
- return d.length?`<small>${d.length} delivered · you owe <b>$${sum(u).toFixed(2)}</b> (${u.length} unpaid) · paid $${sum(d.filter(j=>j.paid)).toFixed(2)}</small><br>`:""};
+/* a job counts toward pay once the rider has picked it up */
+const payable=j=>j.rider&&(j.st==="pickedup"||j.st==="delivered");
+const owed=id=>{const d=jobs.filter(j=>j.rider===id&&payable(j)),u=d.filter(j=>!j.paid),sum=a=>a.reduce((t,j)=>t+(Number(j.fee)||0),0);
+ return d.length?`<small>${d.length} job${d.length>1?"s":""} · you owe <b>$${sum(u).toFixed(2)}</b> (${u.length} unpaid) · paid $${sum(d.filter(j=>j.paid)).toFixed(2)}</small><br>`:""};
 function ownerLists(){
  const ok=riders.filter(r=>r.approved);
  $("#rl").innerHTML=`<div class="card"><h2>Riders</h2>`+(riders.map(r=>`<div style="margin:8px 0"><b>${esc(r.name)}</b> · ${esc(r.phone)}<br>${owed(r.id)}
@@ -91,10 +93,10 @@ function ownerLists(){
  const r=riders.find(x=>x.id===mapR);
  $("#map").innerHTML=r&&r.lat?`<iframe title="Rider map" src="https://www.openstreetmap.org/export/embed.html?bbox=${r.lng-.01},${r.lat-.01},${r.lng+.01},${r.lat+.01}&layer=mapnik&marker=${r.lat},${r.lng}"></iframe><p>${esc(r.name)} · updated ${ago(r.ts)} · <a href="https://www.google.com/maps?q=${r.lat},${r.lng}" target="_blank" rel="noopener">Open in Google Maps</a></p>`:"";
  $("#jl").innerHTML=jobs.map(j=>`<div class="card"><span class="tag">${LBL[j.st]||j.st}</span> <h2>${esc(j.name)} · ${esc(j.phone)}</h2>
-  <p>${esc(j.addr)}</p><p>${esc(j.items)}</p>${photos(j)}<p>Delivery fee <b>$${Number(j.fee).toFixed(2)}</b> ${j.paid?`<span class="tag">Rider paid</span>`:j.st==="delivered"?`<span class="tag" style="background:#c8932e;color:#0b2a5b">Rider not paid</span>`:""}</p>
+  <p>${esc(j.addr)}</p><p>${esc(j.items)}</p>${photos(j)}<p>Delivery fee <b>$${Number(j.fee).toFixed(2)}</b> ${j.paid?`<span class="tag">Rider paid</span>`:payable(j)?`<span class="tag" style="background:#c8932e;color:#0b2a5b">Rider not paid</span>`:""}</p>
   <select data-as="${j.id}" aria-label="Assign rider"><option value="">Assign rider…</option>${ok.map(x=>`<option value="${x.id}"${x.id===j.rider?" selected":""}>${esc(x.name)}</option>`).join("")}</select>
   <div class="acts">${j.st!=="delivered"&&NEXT[j.st]?`<button class="btn o" data-adv="${j.id}">Mark ${LBL[NEXT[j.st]].toLowerCase()}</button>`:""}
-  ${j.st==="delivered"?`<button class="btn ${j.paid?"l":"o"}" data-pay="${j.id}">${j.paid?"Undo paid":"Mark rider paid"}</button>`:""}${j.paid?"":`<button class="btn l" data-fee="${j.id}">Change fee</button>`}
+  ${payable(j)?`<button class="btn ${j.paid?"l":"o"}" data-pay="${j.id}">${j.paid?"Undo paid":"Mark rider paid"}</button>`:""}${j.paid?"":`<button class="btn l" data-fee="${j.id}">Change fee</button>`}
   ${cm("o"+j.id,[["Call customer",tel(j.phone)],["WhatsApp customer",wa(j.phone),1],...(()=>{const r=riders.find(x=>x.id===j.rider);return r?[["Call rider "+esc(r.name),tel(r.phone)],["WhatsApp rider",wa(r.phone),1]]:[]})()])}
   <a class="btn l" href="${esc(nav(j))}" target="_blank" rel="noopener">Map</a><button class="btn l" data-rm="${j.id}">Remove</button></div></div>`).join("")||`<div class="card"><p>No deliveries yet.</p></div>`;
 }

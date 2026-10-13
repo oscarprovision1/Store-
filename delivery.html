@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Oscar Delivery</title>
+<style>
+:root{--bg:#f5f0e1;--ink:#1c2a1f;--mut:#5b675d;--card:#fffdf5;--line:#d8d0b8;--g:#1d6a3a;--o:#d2501a;--on:#fff;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#111a13;--ink:#eef0e6;--mut:#a3b0a5;--card:#1a251c;--line:#2e3d31;--g:#4fb877;--o:#f08a55;--on:#0c140e}}
+:root[data-theme="dark"]{--bg:#111a13;--ink:#eef0e6;--mut:#a3b0a5;--card:#1a251c;--line:#2e3d31;--g:#4fb877;--o:#f08a55;--on:#0c140e}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 "Trebuchet MS",Verdana,sans-serif}
+.wrap{max-width:640px;margin:0 auto;padding:16px 16px 48px}
+h1{font:800 26px/1.1 Georgia,"Times New Roman",serif;margin:8px 0 2px}
+.sub{color:var(--mut);margin:0 0 14px;font-size:14px}
+nav{display:flex;gap:6px;background:var(--card);border:2px solid var(--ink);border-radius:12px;padding:4px;margin-bottom:14px}
+nav button{flex:1;border:0;background:none;color:var(--ink);font:700 15px inherit;padding:10px 4px;border-radius:8px;cursor:pointer}
+nav button[aria-selected=true]{background:var(--g);color:var(--on)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+label{display:block;font-weight:700;font-size:14px;margin:10px 0 4px}
+input,select,textarea{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px}
+textarea{min-height:90px}
+.btn{display:inline-block;border:0;border-radius:8px;background:var(--g);color:var(--on);font:700 15px inherit;padding:11px 14px;margin:8px 6px 0 0;cursor:pointer;text-decoration:none}
+.btn.o{background:var(--o);color:#fff}.btn.l{background:none;color:var(--ink);border:1px solid var(--line)}
+.row{display:flex;gap:8px}.row>*{flex:1}
+.tag{display:inline-block;font-size:12px;font-weight:700;border-radius:99px;padding:2px 9px;background:var(--line);color:var(--ink)}
+.tag.s-new{background:var(--o);color:#fff}.tag.s-assigned,.tag.s-pickedup{background:#e4b300;color:#222}.tag.s-delivered{background:var(--g);color:var(--on)}
+.job h3{margin:0 0 4px;font-size:16px}.job p{margin:3px 0;font-size:14px;color:var(--mut)}
+.fee{font:800 20px Georgia,serif;color:var(--o)}
+.empty{color:var(--mut);text-align:center;padding:24px 8px}
+.scroll{overflow-x:auto}
+small{color:var(--mut)}
+.av{width:64px;height:64px;object-fit:cover;border-radius:50%;border:2px solid var(--line);cursor:zoom-in;background:var(--bg)}.av.big{position:fixed;top:5%;left:5%;width:90%;height:90%;object-fit:contain;border-radius:8px;z-index:9;background:#000;cursor:zoom-out}
+.fg{margin:0;text-align:center;font-size:12px;color:var(--mut)}.ph{display:flex;gap:14px;margin:6px 0}.who{display:flex;align-items:center;gap:10px;margin:6px 0}.who span{flex:1}
+:focus-visible{outline:3px solid var(--o);outline-offset:2px}
+</style></head><body><div class="wrap">
+<h1>Oscar Delivery</h1>
+<p class="sub">Oscar Enterprise Provision Shop · Omega, Redhill Junction, Paynesville · 8:00am–5:00pm</p>
+<nav role="tablist"><button role="tab" data-t="order">Request delivery</button><button role="tab" data-t="dispatch">Dispatch</button><button role="tab" data-t="rider">Rider</button></nav>
+<main id="main"></main>
+<input type="file" id="picin" accept="image/*" hidden>
+</div>
+<script>
+const SHOP_WA="231880958212",SHOP_MAIL="Prorollgardner9@gmail.com",KEY="oscar-delivery-v1";
+let S={jobs:[],riders:[],zones:[{n:"Paynesville",f:2},{n:"Red Light",f:3},{n:"Monrovia central",f:4},{n:"Other (we will confirm)",f:5}],seq:1};
+try{const r=localStorage.getItem(KEY);if(r)S=Object.assign(S,JSON.parse(r))}catch(e){}
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
+let tab="order",last=null,riderSel="";
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const digits=p=>{p=String(p).replace(/\D/g,"").replace(/^0+/,"");return p.startsWith("231")?p:"231"+p};
+const wa=(n,m)=>"https://wa.me/"+digits(n)+"?text="+encodeURIComponent(m);
+const map=a=>"https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(a+", Liberia");
+const mapJ=j=>!j.loc?map(j.addr):/^https?:/i.test(j.loc)?j.loc:"https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(j.loc);
+let picJob=null;
+function shrink(f,max,cb){const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const k=Math.min(1,max/Math.max(im.width,im.height));const c=document.createElement("canvas");c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext("2d").drawImage(im,0,0,c.width,c.height);cb(c.toDataURL("image/jpeg",.7))};im.src=r.result};r.readAsDataURL(f)}
+const av=(p,l)=>typeof p==="string"&&p.indexOf("data:image/")===0?'<figure class="fg"><img class="av" data-zoom="1" alt="'+(l||"")+'" src="'+p+'">'+(l?"<figcaption>"+l+"</figcaption>":"")+"</figure>":"";
+const money=n=>"$"+Number(n).toFixed(2);
+const LBL={new:"New",assigned:"Assigned",pickedup:"On the way",delivered:"Delivered"};
+function jobText(j){return `Delivery #${j.id}\nCustomer: ${j.name} (${j.phone})\nAddress: ${j.addr}\nZone: ${j.zone}\nItems: ${j.items}\nDelivery fee: ${money(j.fee)} (paid by the shop now, buyer pays later)\nPayment: ${j.pay}\nMap: ${mapJ(j)}`}
+function render(){
+ document.querySelectorAll("nav button").forEach(b=>b.setAttribute("aria-selected",b.dataset.t===tab));
+ $("#main").innerHTML=tab==="order"?vOrder():tab==="dispatch"?vDispatch():vRider();
+}
+function vOrder(){
+ const z=S.zones.map((z,i)=>`<option value="${i}">${esc(z.n)} – ${money(z.f)}</option>`).join("");
+ let done="";
+ if(last){const m="New delivery request\n"+jobText(last);
+  done=`<div class="card"><b>Request #${last.id} ready.</b> Send it to the shop so a rider can be assigned:<br>
+  <a class="btn" target="_blank" rel="noopener" href="${wa(SHOP_WA,m)}">Send on WhatsApp</a>
+  <a class="btn l" href="mailto:${SHOP_MAIL}?subject=${encodeURIComponent("Delivery request #"+last.id)}&body=${encodeURIComponent(m)}">Send by email</a></div>`}
+ return done+`<div class="card"><label for="n">Your name</label><input id="n" autocomplete="name">
+ <label for="p">Phone / WhatsApp</label><input id="p" type="tel" autocomplete="tel">
+ <label for="a">Delivery address and landmark</label><textarea id="a"></textarea>
+ <label for="loc">Exact location (helps the rider)</label><div class="row"><input id="loc" placeholder="Paste a map link, or tap the button"><button type="button" class="btn l" id="gps" style="flex:none;margin:0">Use my location</button></div><small id="gpsmsg">Use this if you are at the delivery place, or paste a Google Maps link from the person receiving the goods.</small>
+ <label for="z">Delivery zone</label><select id="z">${z}</select>
+ <label for="i">What to deliver</label><textarea id="i" placeholder="e.g. 2 x Star rice 25kg, 1 carton Princess sardine"></textarea>
+ <label for="pay">How you will pay (goods and delivery)</label><select id="pay"><option>Pay later (overseas buyer)</option><option>Credit card / direct pay</option><option>MTN Mobile Money</option></select>
+ <button class="btn o" id="go">Create delivery request</button></div>
+ <p class="sub">Oscar Enterprise Provision Shop pays the rider now. You repay the delivery fee later, together with your goods.</p>`;
+}
+function vDispatch(){
+ const jobs=[...S.jobs].reverse().map(j=>{
+  const ro=S.riders.map(r=>`<option value="${esc(r.name)}"${r.name===j.rider?" selected":""}>${esc(r.name)}</option>`).join("");
+  const rd=S.riders.find(r=>r.name===j.rider);
+  return `<div class="card job"><span class="tag s-${j.st}">${LBL[j.st]}</span> <h3>#${j.id} · ${esc(j.name)}</h3>
+  <p>${esc(j.addr)} <small>(${esc(j.zone)})</small></p><p>${esc(j.items)}</p><p>Goods: ${esc(j.pay)} · Delivery fee <span class="fee">${money(j.fee)}</span> <small>(shop paid, buyer owes)</small></p>
+  <div class="ph">${rd?av(rd.pic,"Rider"):""}${av(j.rpic,"Receiver")}</div>
+  <p><a target="_blank" rel="noopener" href="${mapJ(j)}" style="color:var(--g);font-weight:700">${j.loc?"📍 Pinned location":"Search address on map"}</a></p>
+  <div class="row"><select data-as="${j.id}" aria-label="Assign rider"><option value="">Assign rider…</option>${ro}</select></div>
+  ${rd?`<a class="btn" target="_blank" rel="noopener" href="${wa(rd.phone,"New delivery for you\n"+jobText(j)+"\nRider pay: "+money(j.fee)+"\n\nPicked up? Tap to tell the shop:\nhttps://wa.me/"+SHOP_WA+"?text="+encodeURIComponent("Delivery #"+j.id+" PICKED UP")+"\n\nDelivered? Tap to confirm:\nhttps://wa.me/"+SHOP_WA+"?text="+encodeURIComponent("Delivery #"+j.id+" DELIVERED")+"\n\nAlso send a photo of the person who received the goods in this chat.")}">Message ${esc(rd.name)}</a>`:""}
+  <button class="btn l" data-pic="${j.id}">${j.rpic?"Change":"Add"} receiver photo</button>
+  <button class="btn l" data-loc="${j.id}">${j.loc?"Change":"Add"} location</button>
+  <a class="btn l" target="_blank" rel="noopener" href="${wa(j.phone,"Hello "+j.name+", this is Oscar Enterprise Provision Shop about your delivery #"+j.id+".")}">WhatsApp customer</a>
+  ${j.st!=="delivered"?`<button class="btn o" data-adv="${j.id}">Mark ${j.st==="pickedup"?"delivered":j.st==="assigned"?"on the way":"assigned"}</button>`:""}
+  <button class="btn l" data-del="${j.id}">Remove</button></div>`}).join("")||`<div class="empty">No deliveries yet. Add one from "Request delivery".</div>`;
+ const rs=S.riders.map((r,i)=>`<div class="who">${av(r.pic)}<span>${esc(r.name)} · ${esc(r.phone)}</span> <button class="btn l" data-rr="${i}">Remove</button></div>`).join("")||"<small>No riders yet.</small>";
+ const zs=S.zones.map((z,i)=>`<div class="row"><input data-zn="${i}" value="${esc(z.n)}" aria-label="Zone name"><input data-zf="${i}" type="number" step="0.5" min="0" value="${z.f}" aria-label="Fee"></div>`).join("");
+ return jobs+`<div class="card"><b>Motorcycle riders</b><div style="margin:8px 0">${rs}</div>
+ <div class="row"><input id="rn" placeholder="Rider name"><input id="rp" type="tel" placeholder="Rider phone"></div><label for="rpic">Rider photo</label><input id="rpic" type="file" accept="image/*"><button class="btn" id="ar">Add rider</button></div>
+ <div class="card"><b>Delivery fee by zone (USD): shop pays the rider, buyer repays later</b>${zs}<small>Edit and tap away to save. Starting values are placeholders – set your own.</small></div>
+ <small>Jobs are saved on this phone or computer only.</small>`;
+}
+function vRider(){
+ const ro=S.riders.map(r=>`<option${r.name===riderSel?" selected":""}>${esc(r.name)}</option>`).join("");
+ const js=S.jobs.filter(j=>riderSel&&j.rider===riderSel&&j.st!=="delivered").map(j=>`<div class="card job"><span class="tag s-${j.st}">${LBL[j.st]}</span><h3>#${j.id} · ${esc(j.name)}</h3>
+ <p>${esc(j.addr)}</p><p>${esc(j.items)}</p><p>Goods: ${esc(j.pay)} · Your pay <span class="fee">${money(j.fee)}</span></p>
+ <a class="btn" href="tel:+${digits(j.phone)}">Call</a><a class="btn" target="_blank" rel="noopener" href="${mapJ(j)}">Navigate</a><button class="btn l" data-sendloc="${j.id}">Share my location</button><button class="btn l" data-pic="${j.id}">${j.rpic?"Change":"Add"} receiver photo</button>${av(j.rpic,"Receiver")}
+ <button class="btn o" data-adv="${j.id}">${j.st==="pickedup"?"Mark delivered":"I picked it up"}</button></div>`).join("");
+ return `<div class="card"><label for="rs">I am rider</label><select id="rs"><option value="">Choose your name…</option>${ro}</select></div>`+
+ (riderSel?(js||`<div class="empty">No open deliveries for you.</div>`):`<div class="empty">Choose your name to see your jobs. Riders are added in Dispatch.</div>`);
+}
+document.addEventListener("click",e=>{
+ const t=e.target;
+ if(t.dataset.t){tab=t.dataset.t;render();return}
+ if(t.dataset.zoom){t.classList.toggle("big");return}
+ if(t.dataset.pic){picJob=t.dataset.pic;$("#picin").click();return}
+ if(t.id==="gps"){const m=$("#gpsmsg");if(!navigator.geolocation){m.textContent="Location is not available here. Paste a map link instead.";return}m.textContent="Finding location…";navigator.geolocation.getCurrentPosition(p=>{$("#loc").value=p.coords.latitude.toFixed(6)+","+p.coords.longitude.toFixed(6);m.textContent="Location added."},()=>{m.textContent="Could not get location. Allow location access, or paste a map link."},{enableHighAccuracy:true,timeout:15000});return}
+ if(t.dataset.loc){const j=S.jobs.find(j=>j.id==t.dataset.loc);const v=prompt("Paste a Google Maps link or coordinates (lat,lng):",j.loc||"");if(v!==null){j.loc=v.trim();save();render()}return}
+ if(t.dataset.sendloc){const j=S.jobs.find(j=>j.id==t.dataset.sendloc);if(!navigator.geolocation){alert("Location is not available here.");return}navigator.geolocation.getCurrentPosition(p=>{window.open(wa(SHOP_WA,"Rider location for delivery #"+j.id+": https://www.google.com/maps?q="+p.coords.latitude+","+p.coords.longitude),"_blank")},()=>alert("Allow location access to share it."),{enableHighAccuracy:true,timeout:15000});return}
+ if(t.id==="go"){
+  const j={id:S.seq++,name:$("#n").value.trim(),phone:$("#p").value.trim(),addr:$("#a").value.trim(),items:$("#i").value.trim(),pay:$("#pay").value,st:"new",rider:"",loc:$("#loc").value.trim()};
+  const z=S.zones[+$("#z").value];j.zone=z.n;j.fee=z.f;
+  if(!j.name||!j.phone||!j.addr||!j.items){alert("Please fill in name, phone, address and items.");S.seq--;return}
+  S.jobs.push(j);save();last=j;render();window.scrollTo(0,0);return}
+ if(t.id==="ar"){const n=$("#rn").value.trim(),p=$("#rp").value.trim(),f=$("#rpic").files[0];if(n&&p&&!S.riders.some(r=>r.name===n)){const add=pic=>{S.riders.push({name:n,phone:p,pic:pic||""});save();render()};f?shrink(f,320,add):add("")}return}
+ if(t.dataset.rr){S.riders.splice(+t.dataset.rr,1);save();render();return}
+ if(t.dataset.del){if(confirm("Remove this delivery?")){S.jobs=S.jobs.filter(j=>j.id!=t.dataset.del);save();render()}return}
+ if(t.dataset.adv){const j=S.jobs.find(j=>j.id==t.dataset.adv);if(j){j.st=j.st==="new"?(j.rider?"pickedup":"assigned"):j.st==="assigned"?"pickedup":"delivered";save();render()}}
+});
+document.addEventListener("change",e=>{
+ const t=e.target;
+ if(t.id==="picin"){const f=t.files[0],j=S.jobs.find(j=>j.id==picJob);if(f&&j)shrink(f,640,d=>{j.rpic=d;save();render()});t.value="";return}
+ if(t.dataset.as){const j=S.jobs.find(j=>j.id==t.dataset.as);j.rider=t.value;if(t.value&&j.st==="new")j.st="assigned";save();render()}
+ if(t.id==="rs"){riderSel=t.value;render()}
+ if("zn" in t.dataset){S.zones[+t.dataset.zn].n=t.value||"Zone";save()}
+ if("zf" in t.dataset){S.zones[+t.dataset.zf].f=Math.max(0,+t.value||0);save()}
+});
+render();
+</script></body></html>

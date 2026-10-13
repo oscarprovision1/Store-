@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Oscar Delivery Live</title>
+<style>
+:root{--bg:#f5f0e1;--ink:#1c2a1f;--mut:#5b675d;--card:#fffdf5;--line:#d8d0b8;--g:#1d6a3a;--o:#d2501a;--on:#fff}
+@media(prefers-color-scheme:dark){:root{--bg:#111a13;--ink:#eef0e6;--mut:#a3b0a5;--card:#1a251c;--line:#2e3d31;--g:#4fb877;--o:#f08a55;--on:#0c140e}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 "Trebuchet MS",Verdana,sans-serif}
+.wrap{max-width:640px;margin:0 auto;padding:16px 16px 48px}
+h1{font:800 26px/1.1 Georgia,serif;margin:8px 0 12px}h2{font:700 18px Georgia,serif;margin:0 0 6px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+label{display:block;font-weight:700;font-size:14px;margin:10px 0 4px}
+input,select,textarea{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px}
+.btn{display:inline-block;border:0;border-radius:8px;background:var(--g);color:var(--on);font:700 15px inherit;padding:10px 13px;margin:8px 6px 0 0;cursor:pointer;text-decoration:none}
+.btn.o{background:var(--o);color:#fff}.btn.l{background:none;color:var(--ink);border:1px solid var(--line)}
+.top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;font-size:14px}
+.tag{display:inline-block;font-size:12px;font-weight:700;border-radius:99px;padding:2px 9px;background:var(--line)}
+.err{color:var(--o);font-weight:700}small,p{color:var(--mut)}p{margin:3px 0;font-size:14px}
+iframe{width:100%;height:260px;border:1px solid var(--line);border-radius:12px;margin-bottom:12px}
+hr{border:0;border-top:1px solid var(--line);margin:14px 0}
+</style></head><body><div class="wrap"><h1>Oscar Delivery Live</h1><div id="app"></div></div>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+/* STEP 1: paste your Firebase settings here (see setup steps) */
+const CFG={apiKey:"AIzaSyBj0k6GNxYDMULVkwSuf9UsoPP7rGeDZlg",authDomain:"oscar-delivery-19b7c.firebaseapp.com",projectId:"oscar-delivery-19b7c",appId:"1:593226523351:web:79b397324bbd379ce60692"};
+/* STEP 2: the owner login email (lowercase). Must match the owner email in the rules. */
+const OWNER="prorollgardner9@gmail.com";
+
+const $=s=>document.querySelector(s),app=$("#app");
+const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+if(CFG.apiKey.indexOf("PASTE")===0){app.innerHTML='<div class="card"><h2>Setup needed</h2><p>Paste your Firebase settings at the top of this file, then upload it again.</p></div>';throw new Error("setup")}
+firebase.initializeApp(CFG);const auth=firebase.auth(),db=firebase.firestore();
+let user=null,unsubs=[],riders=[],jobs=[],me=null,watch=null,lastSend=0,mapR="";
+const LBL={new:"New",assigned:"Assigned",pickedup:"On the way",delivered:"Delivered"};
+const NEXT={new:"assigned",assigned:"pickedup",pickedup:"delivered"};
+const ago=t=>{if(!t)return"never";const m=Math.round((Date.now()-t)/60000);return m<1?"just now":m<60?m+" min ago":Math.round(m/60)+" h ago"};
+const nav=j=>!j.loc?"https://www.google.com/maps/search/?api=1&query="+encodeURIComponent((j.addr||"")+", Liberia"):/^https?:/i.test(j.loc)?j.loc:"https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(j.loc);
+
+auth.onAuthStateChanged(u=>{unsubs.forEach(f=>f());unsubs=[];stopShare();me=null;riders=[];jobs=[];user=u;
+ if(!u)return loginView();
+ (u.email||"").toLowerCase()===OWNER?ownerStart():riderStart()});
+
+function loginView(){
+ app.innerHTML=`<div class="card"><h2>Log in</h2><label for="em">Email</label><input id="em" type="email" autocomplete="email">
+ <label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password">
+ <button class="btn" id="li">Log in</button><hr><b>New rider?</b>
+ <label for="nm">Your name</label><input id="nm" autocomplete="name"><label for="ph">Phone / WhatsApp</label><input id="ph" type="tel">
+ <button class="btn o" id="su">Create rider account</button><p id="err" class="err"></p></div>`;
+ const err=m=>$("#err").textContent=m;
+ $("#li").onclick=()=>auth.signInWithEmailAndPassword($("#em").value.trim(),$("#pw").value).catch(e=>err(e.message));
+ $("#su").onclick=async()=>{const em=$("#em").value.trim(),pw=$("#pw").value,nm=$("#nm").value.trim(),ph=$("#ph").value.trim();
+  if(!nm||!ph){err("Enter your name and phone first.");return}
+  try{const c=await auth.createUserWithEmailAndPassword(em,pw);
+   if(em.toLowerCase()!==OWNER)await db.collection("riders").doc(c.user.uid).set({name:nm,phone:ph,approved:false,ts:Date.now()})}catch(e){err(e.message)}};
+}
+
+/* ---------- OWNER ---------- */
+function ownerStart(){
+ app.innerHTML=`<div class="top"><span>Shop: ${esc(user.email)}</span><button class="btn l" id="lo" style="margin:0">Log out</button></div>
+ <div class="card"><h2>New delivery</h2><label for="n">Customer name</label><input id="n"><label for="p">Customer phone</label><input id="p" type="tel">
+ <label for="a">Address and landmark</label><textarea id="a"></textarea><label for="l">Map link or coordinates (optional)</label><input id="l">
+ <label for="i">Items</label><textarea id="i"></textarea><label for="f">Delivery fee (USD, shop pays rider, buyer repays later)</label><input id="f" type="number" step="0.5" min="0" value="2">
+ <button class="btn o" id="add">Create delivery</button><p id="msg" class="err"></p></div>
+ <div id="map"></div><div id="rl"></div><div id="jl"></div>`;
+ $("#lo").onclick=()=>auth.signOut();
+ $("#add").onclick=()=>{const j={name:$("#n").value.trim(),phone:$("#p").value.trim(),addr:$("#a").value.trim(),loc:$("#l").value.trim(),items:$("#i").value.trim(),fee:Math.max(0,+$("#f").value||0),st:"new",rider:"",riderName:"",ts:Date.now()};
+  if(!j.name||!j.phone||!j.addr||!j.items){$("#msg").textContent="Fill in name, phone, address and items.";return}
+  db.collection("jobs").add(j).then(()=>{$("#msg").textContent="";["n","p","a","l","i"].forEach(k=>$("#"+k).value="")}).catch(e=>$("#msg").textContent=e.message)};
+ unsubs.push(db.collection("riders").onSnapshot(s=>{riders=s.docs.map(d=>({id:d.id,...d.data()}));ownerLists()},e=>{$("#rl").textContent=e.message}));
+ unsubs.push(db.collection("jobs").orderBy("ts","desc").onSnapshot(s=>{jobs=s.docs.map(d=>({id:d.id,...d.data()}));ownerLists()},e=>{$("#jl").textContent=e.message}));
+}
+function ownerLists(){
+ const ok=riders.filter(r=>r.approved);
+ $("#rl").innerHTML=`<div class="card"><h2>Riders</h2>`+(riders.map(r=>`<div style="margin:8px 0"><b>${esc(r.name)}</b> · ${esc(r.phone)}<br>
+  ${r.approved?`<span class="tag">Approved</span> <small>seen ${ago(r.ts&&r.lat?r.ts:0)}</small>`:`<button class="btn" data-ap="${r.id}">Approve</button>`}
+  ${r.lat?`<button class="btn l" data-sh="${r.id}">Show on map</button>`:""}</div>`).join("")||"<p>No riders yet. Riders create their own account from the login page.</p>")+`</div>`;
+ const r=riders.find(x=>x.id===mapR);
+ $("#map").innerHTML=r&&r.lat?`<iframe title="Rider map" src="https://www.openstreetmap.org/export/embed.html?bbox=${r.lng-.01},${r.lat-.01},${r.lng+.01},${r.lat+.01}&layer=mapnik&marker=${r.lat},${r.lng}"></iframe><p>${esc(r.name)} · updated ${ago(r.ts)} · <a href="https://www.google.com/maps?q=${r.lat},${r.lng}" target="_blank" rel="noopener">Open in Google Maps</a></p>`:"";
+ $("#jl").innerHTML=jobs.map(j=>`<div class="card"><span class="tag">${LBL[j.st]||j.st}</span> <h2>${esc(j.name)} · ${esc(j.phone)}</h2>
+  <p>${esc(j.addr)}</p><p>${esc(j.items)}</p><p>Delivery fee $${Number(j.fee).toFixed(2)} (shop paid, buyer owes)</p>
+  <select data-as="${j.id}" aria-label="Assign rider"><option value="">Assign rider…</option>${ok.map(x=>`<option value="${x.id}"${x.id===j.rider?" selected":""}>${esc(x.name)}</option>`).join("")}</select>
+  ${j.st!=="delivered"&&NEXT[j.st]?`<button class="btn o" data-adv="${j.id}">Mark ${LBL[NEXT[j.st]].toLowerCase()}</button>`:""}
+  <a class="btn l" href="${esc(nav(j))}" target="_blank" rel="noopener">Map</a><button class="btn l" data-rm="${j.id}">Remove</button></div>`).join("")||`<div class="card"><p>No deliveries yet.</p></div>`;
+}
+
+/* ---------- RIDER ---------- */
+function riderStart(){
+ app.innerHTML=`<div class="top"><span>Rider login</span><button class="btn l" id="lo" style="margin:0">Log out</button></div><div id="rb"></div>`;
+ $("#lo").onclick=()=>auth.signOut();
+ unsubs.push(db.collection("riders").doc(user.uid).onSnapshot(d=>{me=d.exists?d.data():null;riderRender()},e=>{$("#rb").textContent=e.message}));
+ unsubs.push(db.collection("jobs").where("rider","==",user.uid).onSnapshot(s=>{jobs=s.docs.map(d=>({id:d.id,...d.data()}));riderRender()},()=>{}));
+}
+function riderRender(){
+ const b=$("#rb");if(!b)return;
+ if(!me){b.innerHTML=`<div class="card"><p>Setting up your account…</p></div>`;return}
+ if(!me.approved){b.innerHTML=`<div class="card"><h2>Hello ${esc(me.name)}</h2><p>Waiting for the shop to approve your account. Check back soon.</p></div>`;return}
+ const open=jobs.filter(j=>j.st!=="delivered").sort((a,c)=>a.ts-c.ts);
+ b.innerHTML=`<div class="card"><h2>Hello ${esc(me.name)}</h2><button class="btn ${watch!=null?"o":""}" id="sh">${watch!=null?"Stop sharing location":"Share my live location"}</button>
+ <p>Keep this page open and the screen on while delivering. The shop sees your position update every 15 seconds.</p></div>`+
+ (open.map(j=>`<div class="card"><span class="tag">${LBL[j.st]||j.st}</span><h2>${esc(j.name)}</h2><p>${esc(j.addr)}</p><p>${esc(j.items)}</p>
+  <a class="btn" href="tel:${esc(j.phone)}">Call</a><a class="btn l" href="${esc(nav(j))}" target="_blank" rel="noopener">Navigate</a>
+  ${NEXT[j.st]&&j.st!=="new"?`<button class="btn o" data-adv="${j.id}">${j.st==="assigned"?"I picked it up":"Delivered"}</button>`:""}</div>`).join("")||`<div class="card"><p>No open deliveries for you.</p></div>`);
+ $("#sh").onclick=()=>{watch!=null?stopShare():startShare();riderRender()};
+}
+function startShare(){
+ if(!navigator.geolocation){alert("Location is not available on this device.");return}
+ watch=navigator.geolocation.watchPosition(p=>{if(Date.now()-lastSend<15000)return;lastSend=Date.now();
+  db.collection("riders").doc(user.uid).update({lat:p.coords.latitude,lng:p.coords.longitude,ts:Date.now()})},
+  ()=>{alert("Allow location access for this page, then try again.");stopShare();riderRender()},{enableHighAccuracy:true,maximumAge:5000});
+}
+function stopShare(){if(watch!=null&&navigator.geolocation)navigator.geolocation.clearWatch(watch);watch=null}
+
+/* ---------- shared clicks ---------- */
+document.addEventListener("click",e=>{const t=e.target,d=t.dataset||{};
+ if(d.ap)db.collection("riders").doc(d.ap).update({approved:true});
+ if(d.sh){mapR=d.sh;ownerLists()}
+ if(d.adv){const j=jobs.find(x=>x.id===d.adv);if(j&&NEXT[j.st])db.collection("jobs").doc(j.id).update({st:NEXT[j.st]})}
+ if(d.rm&&confirm("Remove this delivery?"))db.collection("jobs").doc(d.rm).delete();
+});
+document.addEventListener("change",e=>{const t=e.target;
+ if(t.dataset&&t.dataset.as){const r=riders.find(x=>x.id===t.value),j=jobs.find(x=>x.id===t.dataset.as);
+  db.collection("jobs").doc(t.dataset.as).update({rider:t.value,riderName:r?r.name:"",st:t.value?(j&&j.st==="new"?"assigned":j.st):"new"})}
+});
+setInterval(()=>{if(user&&$("#rl"))ownerLists()},60000);
+</script></body></html>
